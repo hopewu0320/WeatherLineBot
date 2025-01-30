@@ -20,15 +20,17 @@ parser = WebhookParser(settings.LINE_CHANNEL_SECRET)
 Output: 現在城市的天氣
 
 '''
+city_list = ["宜蘭縣", "桃園市", "新竹縣", "苗栗縣",
+                 "彰化縣", "南投縣", "雲林縣", "嘉義縣",
+                 "屏東縣", "臺東縣", "花蓮縣", "澎湖縣",
+                 "基隆市", "新竹市", "嘉義市", "臺北市",
+                 "高雄市", "新北市", "臺中市", "臺南市",
+                 "連江縣", "金門縣"]
+# 全域變數，用於儲存使用者當前的狀態
+user_state = {}
 
 @csrf_exempt
 def callback(request):
-    city_list = ["宜蘭縣","桃園市","新竹縣","苗栗縣",
-            "彰化縣","南投縣","雲林縣","嘉義縣",
-            "屏東縣","臺東縣","花蓮縣","澎湖縣",
-            "基隆市","新竹市","嘉義市","臺北市",
-            "高雄市","新北市","臺中市","臺南市",
-            "連江縣","金門縣"]
     if request.method == 'POST':
         signature = request.META['HTTP_X_LINE_SIGNATURE']
         body = request.body.decode('utf-8')
@@ -38,30 +40,42 @@ def callback(request):
             return HttpResponseForbidden()
         except LineBotApiError:
             return HttpResponseBadRequest()
-        
+
         for event in events:
             if isinstance(event, MessageEvent):  # 如果是訊息事件
-                if event.message.text in city_list:  # 如果使用者輸入「天氣」
-                    # 呼叫 weather() 函數取得天氣資料
-                    city_name = event.message.text
-                    weather_data = weather(request,city_name)
-                    # 回覆天氣資訊給使用者
+                user_id = event.source.user_id  # 取得使用者 ID
+                message_text = event.message.text  # 取得使用者輸入的訊息
+
+                if user_id not in user_state:
+                    user_state[user_id] = {}  # 初始化使用者狀態
+
+                if 'country' not in user_state[user_id]:  # 如果使用者尚未輸入縣市
+                    if message_text in city_list:  # 檢查是否為有效的縣市
+                        user_state[user_id]['country'] = message_text
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text="輸入城鎮名")
+                        )
+                    else:
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text="請輸入有效的縣市名稱")
+                        )
+                else:  # 如果使用者已經輸入縣市，等待輸入城鎮
+                    county = user_state[user_id]['country']
+                    town = message_text
+                    weather_data = weather(county, town)  # 取得天氣資料
                     line_bot_api.reply_message(
                         event.reply_token,
                         TextSendMessage(text=weather_data)
                     )
-                else:
-                    # 回覆使用者輸入的文字
-                    line_bot_api.reply_message(
-                        event.reply_token,
-                        TextSendMessage(text=event.message.text)
-                    )
+                    del user_state[user_id]  # 清除使用者狀態
         return HttpResponse()
     else:
         return HttpResponseBadRequest()
 
 
-def weather(request,city_name):
+def weather(city_name, town_name):
     # 將主要縣市個別的 JSON 代碼列出
     api_list = {"宜蘭縣":"F-D0047-001","桃園市":"F-D0047-005","新竹縣":"F-D0047-009","苗栗縣":"F-D0047-013",
             "彰化縣":"F-D0047-017","南投縣":"F-D0047-021","雲林縣":"F-D0047-025","嘉義縣":"F-D0047-029",
@@ -88,7 +102,7 @@ def weather(request,city_name):
 
     result = Normal_Temperature_Data(data)
     #ToDo  指定某個鄉
-    result = result['蘇澳鎮']
+    result = result[town_name]
     print(result[:20])
     
     # ToDo:
