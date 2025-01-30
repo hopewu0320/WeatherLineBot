@@ -17,24 +17,32 @@ parser = WebhookParser(settings.LINE_CHANNEL_SECRET)
  
 @csrf_exempt
 def callback(request):
-    #print(request.method)
     if request.method == 'POST':
         signature = request.META['HTTP_X_LINE_SIGNATURE']
         body = request.body.decode('utf-8')
         try:
-            events = parser.parse(body, signature)  # 傳入的事件
+            events = parser.parse(body, signature)  # 解析傳入的事件
         except InvalidSignatureError:
             return HttpResponseForbidden()
         except LineBotApiError:
-            
             return HttpResponseBadRequest()
- 
+
         for event in events:
-            if isinstance(event, MessageEvent):  # 如果有訊息事件
-                line_bot_api.reply_message(  # 回復傳入的訊息文字
-                    event.reply_token,
-                    TextSendMessage(text=event.message.text)
-                )
+            if isinstance(event, MessageEvent):  # 如果是訊息事件
+                if event.message.text == "天氣":  # 如果使用者輸入「天氣」
+                    # 呼叫 weather() 函數取得天氣資料
+                    weather_data = weather(request)
+                    # 回覆天氣資訊給使用者
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=weather_data)
+                    )
+                else:
+                    # 回覆使用者輸入的文字
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=event.message.text)
+                    )
         return HttpResponse()
     else:
         return HttpResponseBadRequest()
@@ -64,10 +72,6 @@ def weather(request):
     url = f'https://opendata.cwa.gov.tw/api/v1/rest/datastore/{city}?Authorization={code}&limit=30&format=JSON'
     req = requests.get(url)   # 取得主要縣市預報資料
     data = req.json()         # json 格式化訊息內容
-    
-
-    
-    
 
     result = Normal_Temperature_Data(data)
     result = result['板橋區']
@@ -85,7 +89,7 @@ def weather(request):
     tomorrow_data = Get_Tomorrow_Data(result)
     Tomorow_Temperature_Text = Print_Tomorow_Temperature_Text(tomorrow_data)
     
-    return HttpResponse('123')
+    return Tomorow_Temperature_Text
 
 def Normal_Temperature_Data(data):
     '''
