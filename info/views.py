@@ -14,9 +14,21 @@ import requests, time
 line_bot_api = LineBotApi(settings.LINE_CHANNEL_ACCESS_TOKEN)
 parser = WebhookParser(settings.LINE_CHANNEL_SECRET)
  
- 
+
+'''
+功能: !現在
+Output: 現在城市的天氣
+
+'''
+
 @csrf_exempt
 def callback(request):
+    city_list = ["宜蘭縣","桃園市","新竹縣","苗栗縣",
+            "彰化縣","南投縣","雲林縣","嘉義縣",
+            "屏東縣","臺東縣","花蓮縣","澎湖縣",
+            "基隆市","新竹市","嘉義市","臺北市",
+            "高雄市","新北市","臺中市","臺南市",
+            "連江縣","金門縣"]
     if request.method == 'POST':
         signature = request.META['HTTP_X_LINE_SIGNATURE']
         body = request.body.decode('utf-8')
@@ -26,12 +38,13 @@ def callback(request):
             return HttpResponseForbidden()
         except LineBotApiError:
             return HttpResponseBadRequest()
-
+        
         for event in events:
             if isinstance(event, MessageEvent):  # 如果是訊息事件
-                if event.message.text == "天氣":  # 如果使用者輸入「天氣」
+                if event.message.text in city_list:  # 如果使用者輸入「天氣」
                     # 呼叫 weather() 函數取得天氣資料
-                    weather_data = weather(request)
+                    city_name = event.message.text
+                    weather_data = weather(request,city_name)
                     # 回覆天氣資訊給使用者
                     line_bot_api.reply_message(
                         event.reply_token,
@@ -48,7 +61,7 @@ def callback(request):
         return HttpResponseBadRequest()
 
 
-def weather(request):
+def weather(request,city_name):
     # 將主要縣市個別的 JSON 代碼列出
     api_list = {"宜蘭縣":"F-D0047-001","桃園市":"F-D0047-005","新竹縣":"F-D0047-009","苗栗縣":"F-D0047-013",
             "彰化縣":"F-D0047-017","南投縣":"F-D0047-021","雲林縣":"F-D0047-025","嘉義縣":"F-D0047-029",
@@ -62,7 +75,7 @@ def weather(request):
 
     #ToDo !宜蘭市 間隔三小時天氣預報
 
-    city = 'F-D0047-069' #新北市
+    city = api_list[city_name]
     # t = time.time()
     # t1 = time.localtime(t)       # 因為 colab 所在時區，要額外增加八小時 28800 秒
     # t2 = time.localtime(t) # 因為 colab 所在時區，要額外增加八小時 28800 秒與三小時 10800 秒
@@ -74,7 +87,8 @@ def weather(request):
     data = req.json()         # json 格式化訊息內容
 
     result = Normal_Temperature_Data(data)
-    result = result['板橋區']
+    #ToDo  指定某個鄉
+    result = result['蘇澳鎮']
     print(result[:20])
     
     # ToDo:
@@ -151,12 +165,12 @@ def Get_Tomorrow_Data(result):
     '''
 
     now = datetime.now()
-    print(f"now: {now}")
+    #print(f"now: {now}")
     formatted_now = now.strftime("%Y-%m-%dT%H:%M")
     print("格式化時間:", formatted_now)
 
     date_part = formatted_now.split('T')[0] #現在時間2025-01-30
-    print(date_part)
+    #print(date_part)
     tomorrow_data = []
     #取出所有非2025-01-30的24筆資料 即2525-01-31的每小時資料
     i = 0
@@ -167,7 +181,7 @@ def Get_Tomorrow_Data(result):
         if data['時間'].split('T')[0] != date_part:    #天氣資料的日期不等於今天日期
             tomorrow_data.append(data)
             i += 1
-    print(f"tomorrow_data: {tomorrow_data}")    
+    #print(f"tomorrow_data: {tomorrow_data}")    
     return tomorrow_data
 
 
