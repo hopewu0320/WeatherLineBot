@@ -1,5 +1,5 @@
 from django.shortcuts import render
-
+from datetime import datetime
 # Create your views here.
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
@@ -70,16 +70,21 @@ def weather(request):
     
 
     result = Normal_Temperature_Data(data)
-    
-    print(result['板橋區'][:2])
+    result = result['板橋區']
+    print(result[:20])
     
     # ToDo:
+    # 每天傳送明天區間時間的天氣資訊
     # Get 現在時間 2025-01-30T17:20
     # 回傳字串:
-    # 現在時間: 2025-01-30T17:20，溫度17度C，體感溫度13度C，稍有寒意
+    # 時間: 2025-01-30T18:00 ~ 2025-01-30T21:00，
+    # 溫度17度C，體感溫度13度C，稍有寒意
     
 
 
+    tomorrow_data = Get_Tomorrow_Data(result)
+    Tomorow_Temperature_Text = Print_Tomorow_Temperature_Text(tomorrow_data)
+    
     return HttpResponse('123')
 
 def Normal_Temperature_Data(data):
@@ -93,7 +98,7 @@ def Normal_Temperature_Data(data):
     '''
 
     # 要處理的四個指定屬性
-    target_attributes = ["溫度", "體感溫度", "相對溼度", "舒適度指數"]
+    target_attributes = ["溫度", "體感溫度", "相對濕度", "舒適度指數"]
 
     # 初始化結果字典
     result = {}
@@ -119,7 +124,7 @@ def Normal_Temperature_Data(data):
             # 忽略不在目標屬性的資料
             if element_name not in target_attributes:
                 continue
-
+            
             for time_entry in element["Time"]:
                 time = time_entry["DataTime"]
                 value = time_entry["ElementValue"][0]
@@ -134,3 +139,55 @@ def Normal_Temperature_Data(data):
         # 擷取前 10 筆資料並加入結果
         result[location_name].extend(list(time_data.values()))
     return result
+
+def Get_Tomorrow_Data(result):
+    '''
+    Input: 氣象資料
+    Output: [{'時間': '2025-01-31T00:00:00+08:00', '溫度': {'Temperature': '17'}, '體感溫度': {'ApparentTemperature': '15'}, '舒適度指數': {'ComfortIndex': '16', 'ComfortIndexDescription': '稍有寒意'}}, {'時間': '2025-01-31T01:00:00+08:00', '溫度': {'Temperature': '17'}, '體感溫度': {'ApparentTemperature': '15'}, '舒適度指數': {'ComfortIndex': '16', 'ComfortIndexDescription': '稍有寒意'}}, {'時間': '2025-01-31T02:00:00+08:00', '溫度': {'Temperature': '17'}, '體感溫度': {'ApparentTemperature': '15'}]
+    '''
+
+    now = datetime.now()
+    print(f"now: {now}")
+    formatted_now = now.strftime("%Y-%m-%dT%H:%M")
+    print("格式化時間:", formatted_now)
+
+    date_part = formatted_now.split('T')[0] #現在時間2025-01-30
+    print(date_part)
+    tomorrow_data = []
+    #取出所有非2025-01-30的24筆資料 即2525-01-31的每小時資料
+    i = 0
+    for data in result:   
+        #print(data)  #{'時間': '2025-01-30T18:00:00+08:00', '溫度': {'Temperature': '19'}, '體感溫度': {'ApparentTemperature': '15'}, '舒適度指數': {'ComfortIndex': '18', 'ComfortIndexDescription': '稍有寒意'}}
+        if i==24:
+            break
+        if data['時間'].split('T')[0] != date_part:    #天氣資料的日期不等於今天日期
+            tomorrow_data.append(data)
+            i += 1
+    print(f"tomorrow_data: {tomorrow_data}")    
+    return tomorrow_data
+
+
+def Print_Tomorow_Temperature_Text(tomorrow_data):
+    # Input:
+    # tomorrow_data   function:Get_Tomorrow_Data()
+    # 回傳字串:
+    # 2025-01-31
+    # 00:00:00 溫度17度C，體感溫度13度C，稍有寒意
+    # 01:00:00 溫度17度C，體感溫度13度C，稍有寒意
+    #.....
+    Text = f"{tomorrow_data[0]['時間'].split('T')[0]}\n"
+    next_line = "\n"
+    for i,t_data in enumerate(tomorrow_data):
+        tomorrow_day = t_data['時間'].split('T')[0]
+        Temperature = t_data['溫度']['Temperature']
+        Body_feeling_Temperature = t_data['體感溫度']['ApparentTemperature']
+        ComfortIndexDescription = t_data['舒適度指數']['ComfortIndexDescription']
+        RelativeHumidity = t_data['相對濕度']['RelativeHumidity']
+
+        tomorrow_hour = t_data['時間'].split('T')[1].split('+')[0]  #13:00:00
+        if i==len(tomorrow_data)-1:
+            next_line = ""
+        Text = Text + f"時間{tomorrow_hour} 溫度{Temperature}度C，體感溫度{Body_feeling_Temperature}度C，相對濕度{RelativeHumidity}%，{ComfortIndexDescription}。" + f"{next_line}"
+    
+    print(Text)
+    return Text
